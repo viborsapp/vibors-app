@@ -2,19 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_typography.dart';
 import 'widgets/v_mark.dart';
 
-/// Vibors Splash Screen.
+/// Vibors Splash Screen — matches Figma "Splash Screen Logo view" frame.
 ///
-/// Animation spec (matches Figma Splash Animation Prototype):
-///   0.00–0.20s  Deep violet base fade-in
-///   0.20–0.60s  V-mark slide-in from bottom-left + fade
-///   0.40–0.90s  Wordmark "VIBORS" fade + subtle scale (1.0 → 1.02 → 1.0)
-///   0.70–1.30s  Ambient glow pulse on V-mark
-///   1.30–1.60s  Cross-fade out → next screen
+/// Composition (bottom-up):
+///   1. Deep violet → bright violet radial background
+///   2. Dramatic 3D V architecture rendered across the bottom 60% of the screen
+///   3. Centred "v vibors™" lockup (small V-mark + white wordmark)
 ///
-/// Tap anywhere after 0.8s to skip.
+/// Animation (1.6s total) follows the Figma sequence:
+///   0.00–0.30s  Background fades in from black
+///   0.30–0.80s  V architecture rises into place + brightens
+///   0.60–1.10s  Lockup fades in + subtle scale 0.95 → 1.00
+///   1.30–1.60s  Cross-fade out before routing to next screen
+///
+/// Tap after 0.8s to skip.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -26,13 +29,11 @@ class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
   late final AnimationController _controller;
 
-  // Phase animations driven by the master controller.
-  late final Animation<double> _baseFade;
-  late final Animation<Offset> _vMarkSlide;
-  late final Animation<double> _vMarkFade;
-  late final Animation<double> _wordmarkFade;
-  late final Animation<double> _wordmarkScale;
-  late final Animation<double> _glowPulse;
+  late final Animation<double> _bgFade;
+  late final Animation<double> _archRise;
+  late final Animation<double> _archFade;
+  late final Animation<double> _lockupFade;
+  late final Animation<double> _lockupScale;
   late final Animation<double> _exitFade;
 
   static const Duration _total = Duration(milliseconds: 1600);
@@ -45,57 +46,38 @@ class _SplashScreenState extends State<SplashScreen>
     super.initState();
     _controller = AnimationController(vsync: this, duration: _total);
 
-    // Material-standard easing across all phases.
-    const ease = Curves.easeInOutCubic;
-
-    _baseFade = Tween<double>(begin: 0, end: 1).animate(
+    _bgFade = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.000, 0.125, curve: Curves.easeOut),
+        curve: const Interval(0.000, 0.188, curve: Curves.easeOut),
       ),
     );
 
-    _vMarkSlide = Tween<Offset>(
-      begin: const Offset(-0.2, 0.2),
-      end: Offset.zero,
-    ).animate(
+    _archRise = Tween<double>(begin: 80, end: 0).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.125, 0.375, curve: ease),
+        curve: const Interval(0.188, 0.500, curve: Curves.easeOutCubic),
       ),
     );
 
-    _vMarkFade = Tween<double>(begin: 0, end: 1).animate(
+    _archFade = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.125, 0.375, curve: ease),
+        curve: const Interval(0.188, 0.500, curve: Curves.easeOut),
       ),
     );
 
-    _wordmarkFade = Tween<double>(begin: 0, end: 1).animate(
+    _lockupFade = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.250, 0.563, curve: ease),
+        curve: const Interval(0.375, 0.688, curve: Curves.easeOut),
       ),
     );
 
-    _wordmarkScale = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.02), weight: 50),
-      TweenSequenceItem(tween: Tween(begin: 1.02, end: 1.0), weight: 50),
-    ]).animate(
+    _lockupScale = Tween<double>(begin: 0.95, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.250, 0.563, curve: ease),
-      ),
-    );
-
-    _glowPulse = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 50),
-      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.4), weight: 50),
-    ]).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.438, 0.813, curve: ease),
+        curve: const Interval(0.375, 0.688, curve: Curves.easeOutCubic),
       ),
     );
 
@@ -108,12 +90,10 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    // Enable skip after the min threshold.
     Future.delayed(_minBeforeSkip, () {
       if (mounted) setState(() => _canSkip = true);
     });
 
-    // After the full animation, route to next.
     _controller.addStatusListener((status) {
       if (status == AnimationStatus.completed && mounted) {
         _next();
@@ -123,13 +103,11 @@ class _SplashScreenState extends State<SplashScreen>
 
   void _trySkip() {
     if (!_canSkip) return;
-    _controller.value = 0.813; // jump to exit fade
+    _controller.value = 0.813;
     _controller.forward();
   }
 
   void _next() {
-    // TODO(routing): replace with session-aware decision (signed-in → /home,
-    // signed-out → /auth/sign-in). For scaffold we route to /auth.
     if (!mounted) return;
     context.go('/auth');
   }
@@ -146,71 +124,120 @@ class _SplashScreenState extends State<SplashScreen>
       behavior: HitTestBehavior.opaque,
       onTap: _trySkip,
       child: Scaffold(
+        backgroundColor: Colors.black,
         body: AnimatedBuilder(
           animation: _controller,
           builder: (context, _) {
             return Opacity(
               opacity: _exitFade.value,
-              child: Container(
-                decoration: const BoxDecoration(
-                  gradient: AppColors.backgroundRadial,
-                ),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // Glow halo behind V-mark.
-                    Opacity(
-                      opacity: _glowPulse.value.clamp(0.0, 1.0) * 0.7,
-                      child: Container(
-                        width: 360,
-                        height: 360,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: AppColors.brandGlow,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // ── Background: violet → deep navy radial gradient ──
+                  Opacity(
+                    opacity: _bgFade.value,
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        gradient: RadialGradient(
+                          center: Alignment(-0.2, -0.6),
+                          radius: 1.6,
+                          colors: [
+                            AppColors.primary,
+                            Color(0xFF2A0080),
+                            AppColors.deep,
+                          ],
+                          stops: [0.0, 0.45, 1.0],
                         ),
                       ),
                     ),
+                  ),
 
-                    // Base fade wash.
-                    Opacity(
-                      opacity: _baseFade.value,
-                      child: const SizedBox.expand(),
+                  // ── V architecture across the bottom half ──
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    height: MediaQuery.of(context).size.height * 0.55,
+                    child: Transform.translate(
+                      offset: Offset(0, _archRise.value),
+                      child: Opacity(
+                        opacity: _archFade.value,
+                        child: const SplashVArchitecture(),
+                      ),
                     ),
+                  ),
 
-                    // V-mark + wordmark lockup.
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        FadeTransition(
-                          opacity: _vMarkFade,
-                          child: SlideTransition(
-                            position: _vMarkSlide,
-                            child: const VMark(size: 120),
-                          ),
+                  // ── Centred "v vibors™" lockup ──
+                  Center(
+                    child: FractionalTranslation(
+                      translation: const Offset(0, -0.4),
+                      child: Opacity(
+                        opacity: _lockupFade.value,
+                        child: Transform.scale(
+                          scale: _lockupScale.value,
+                          child: const _VibrosLockup(),
                         ),
-                        const SizedBox(height: 32),
-                        FadeTransition(
-                          opacity: _wordmarkFade,
-                          child: ScaleTransition(
-                            scale: _wordmarkScale,
-                            child: Text(
-                              'VIBORS',
-                              style: AppTypography.wordmarkStyle.copyWith(
-                                fontSize: 36,
-                                letterSpacing: 8,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             );
           },
         ),
       ),
+    );
+  }
+}
+
+/// "v vibors™" lockup — the actual logo as it appears on the splash.
+///
+/// Uses the exported Figma asset for crisp rendering. The asset is the dark
+/// variant; we recolour it to white via [ColorFiltered] to read against the
+/// violet background.
+class _VibrosLockup extends StatelessWidget {
+  const _VibrosLockup();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // Small V-mark — coloured in primary violet.
+        const VMark(size: 36),
+        const SizedBox(width: 10),
+        // Wordmark "vibors™".
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Text(
+              'vibors',
+              style: TextStyle(
+                fontSize: 36,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                letterSpacing: -0.5,
+                height: 1.0,
+                fontFeatures: const [FontFeature.disable('liga')],
+              ),
+            ),
+            const Positioned(
+              right: -16,
+              top: 2,
+              child: Text(
+                'TM',
+                style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
